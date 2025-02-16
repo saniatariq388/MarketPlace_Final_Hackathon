@@ -1,225 +1,145 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import Image from "next/image";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+
+import { PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
+import { useEffect, useState } from 'react';
 
 
 
-interface Product {
-  id: number
-  name: string
-  price: number
-  quantity: number
-  image: string
-}
 
-export default function CheckoutForm() {
-  const [sameAsShipping, setSameAsShipping] = useState(false);
-  const [products, setProducts] = useState<Product[]>([])
-  const router = useRouter()
-   
+function CheckoutForm({amount} : {amount: number}) {
+  const stripe = useStripe();
+  const elements = useElements();
+
+  const [clientSecret, setClientSecret] = useState<string>('');
+  const [error, setError] = useState<string>('');
+
+
   useEffect(() => {
-    const savedCart = localStorage.getItem("cart")
-    if (savedCart) {
-      setProducts(JSON.parse(savedCart))
+    // Create PaymentIntent on the server
+    fetch('/api/create-payment-intent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: amount }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setClientSecret(data.clientSecret);
+        console.log('Client Secret:', data.clientSecret); 
+        console.log("payment 😈",<PaymentElement />);
+        if (data.clientSecret) {
+          localStorage.setItem('paymentDetails', JSON.stringify({
+            id: data.paymentId,
+            date: data.created,
+            amount: data.amount,
+          }));
+        }
+      });
+  }, []);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!stripe || !elements) return;
+
+    // Call elements.submit() immediately when the user clicks pay.
+    const { error: submitError } = await elements.submit();
+    if (submitError) {
+      setError(submitError.message || 'Submission failed');
+      return;
     }
-  }, [])
 
-  const calculateSubtotal = () => {
-    return products.reduce((total, product) => total + product.price * product.quantity, 0)
-  }
+    // Then confirm the payment.
+    const { error: confirmError } = await stripe.confirmPayment({
+      elements,
+      clientSecret,
+      confirmParams: {
+        return_url: `${window.location.origin}/PaymentSuccessPage`,
+      },
+    });
 
-  const handlePlaceOrder = () => {
-    // Here you would typically send the order to your backend
-    // For this example, we'll just clear the cart and show a success message
-    localStorage.removeItem("cart")
-    router.push('/order-success')
-  }
-  
+    localStorage.setItem("cart", JSON.stringify([]));
+
+    if (confirmError) {
+      setError(confirmError.message || 'Payment confirmation failed');
+    }
+  };
+
   return (
-    <div className="container mx-auto px-4 py-8 text-black">
-      <div className="grid lg:grid-cols-[1fr_400px] gap-8">
-        {/* Left Column - Forms */}
-        <div className="space-y-8">
-          <div>
-            <h2 className="text-2xl font-bold mb-6">Shipping Address</h2>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="firstName">First name</Label>
-                <Input id="firstName" placeholder="Enter first name" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Last name</Label>
-                <Input id="lastName" placeholder="Enter last name" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email address</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter email address"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone number</Label>
-                <Input id="phone" type="tel" placeholder="Enter phone number" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="company">Company</Label>
-                <Input id="company" placeholder="Enter company name" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="country">Country</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select country" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="us">United States</SelectItem>
-                    <SelectItem value="uk">United Kingdom</SelectItem>
-                    <SelectItem value="ca">Canada</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="city">City</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select city" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ny">New York</SelectItem>
-                    <SelectItem value="la">Los Angeles</SelectItem>
-                    <SelectItem value="ch">Chicago</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="zipCode">ZIP code</Label>
-                <Input id="zipCode" placeholder="Enter ZIP code" />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="address1">Address 1</Label>
-                <Input id="address1" placeholder="Enter street address" />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="address2">Address 2</Label>
-                <Input
-                  id="address2"
-                  placeholder="Enter apartment, suite, etc."
-                />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h2 className="text-2xl font-bold mb-6">Billing Address</h2>
-            <div className="flex items-center space-x-2 mb-6">
-              <Checkbox
-                id="sameAddress"
-                checked={sameAsShipping}
-                onCheckedChange={(checked) =>
-                  setSameAsShipping(checked as boolean)
-                }
-              />
-              <label
-                htmlFor="sameAddress"
-                className="text-sm text-gray-600 cursor-pointer"
-              >
-                Same as shipping address
-              </label>
-            </div>
-          </div>
-
-         
-          <div className="mt-8 grid grid-cols-2 gap-4">
-              <Link href={'/shoppingCart'} >
-                <Button variant="outline" className="flex items-center gap-2">
-                  <ArrowLeft className="h-4 w-4" />
-                  Back to cart
-                </Button>
-              </Link>
-              <Button onClick={handlePlaceOrder} className="bg-[#FF9F0D] hover:bg-[#FF9F0D]/90 flex items-center gap-2">
-                Place Order
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-           </div>
-          
-
-        </div>
-
-        {/* Order Summary */}
-        <Card className="h-fit">
-            <CardHeader>
-              <CardTitle>Order Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Order Items */}
-              {products.map((product) => (
-                <div key={product.id} className="flex gap-4">
-                  <img
-                    src={product.image || "/placeholder.svg"}
-                    alt={product.name}
-                    className="h-20 w-20 object-cover rounded-md"
-                  />
-                  <div>
-                    <h3 className="font-bold text-gray-900">{product.name}</h3>
-                    <p className="text-sm text-gray-500">Quantity: {product.quantity}</p>
-                    <p className="text-sm text-gray-500">${product.price.toFixed(2)}</p>
-                  </div>
-                </div>
-              ))}
-
-          <Separator className="my-6" />
-
-          <div className="space-y-4">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Sub-total</span>
-              <span>${calculateSubtotal().toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Shipping</span>
-              <span>Free</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Discount</span>
-              <span>25%</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Tax</span>
-              <span>${(calculateSubtotal() * 0.1).toFixed(2)}</span>
-            </div>
-            <Separator />
-            <div className="flex justify-between font-bold text-lg">
-              <span>Total</span>
-              <span>${(calculateSubtotal() * 1.1).toFixed(2)}</span>
-            </div>
-          </div>
-          </CardContent>
-          <CardFooter>
-          <Button onClick={handlePlaceOrder} className="w-full mt-6 bg-[#FF9F0D] hover:bg-[#FF9F0D]/90">
-            Place an order
-            <ChevronRight className="w-4 h-4 ml-2" />
-          </Button>
-          </CardFooter>
-        </Card>
+    <form onSubmit={handleSubmit}>
+      <div className="p-10 flex justify-center flex-col gap-6 text-black">
+        {clientSecret && <PaymentElement />}
+       
+        {error && <p className="text-red-600">{error}</p>}
+        <button className="bg-black text-white p-5" type="submit">
+          Payment ({(amount).toLocaleString()})
+        </button>
       </div>
-    </div>
+    </form>
   );
 }
+
+export default CheckoutForm;
+
+
+
+// "use client";
+
+// import { useStripe, useElements, PaymentElement } from "@stripe/react-stripe-js";
+// import { useState } from "react";
+
+// export default function CheckoutForm({ amount }: { amount: number }) {
+//   const stripe = useStripe();
+//   const elements = useElements();
+//   const [loading, setLoading] = useState(false);
+//   const [error, setError] = useState<string | null>(null);
+
+//   const handleSubmit = async (e: React.FormEvent) => {
+//     e.preventDefault();
+//     if (!stripe || !elements) {
+//       setError("Stripe is not loaded yet.");
+//       return;
+//     }
+
+//     setLoading(true);
+//     const { error, paymentIntent } = await stripe.confirmPayment({
+//       elements,
+//       confirmParams: {
+//         return_url: `${window.location.origin}/PaymentSuccessPage`,
+//       },
+//       redirect: "if_required", // Automatically handles redirects
+//     });
+
+//     if (error) {
+//       console.error("Payment Error:", error.message);
+//       setError(error.message || "Payment failed.");
+//     } else {
+//       console.log("✅ Payment Successful:", paymentIntent);
+//       alert("Payment Successful!");
+//     }
+
+//     setLoading(false);
+//   };
+
+//   return (
+//     <form onSubmit={handleSubmit} className="p-4 bg-white rounded-lg shadow-md max-w-lg mx-auto text-black">
+//       <h2 className="text-xl font-bold mb-4">Complete Your Payment</h2>
+//       {error && <div className="text-red-500 mb-2">{error}</div>}
+//       <PaymentElement />
+//       <button
+//         type="submit"
+//         disabled={!stripe || loading}
+//         className="w-full mt-4 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
+//       >
+//         {loading ? "Processing..." : `Pay $${(amount / 100).toFixed(2)}`}
+//       </button>
+//     </form>
+//   );
+// }
+
+
+
+
+
+
+
+

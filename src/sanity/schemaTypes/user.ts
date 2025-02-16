@@ -28,5 +28,21 @@ export const userSchema = {
             title: 'User Image',
             type: 'url',
         },
+        {
+            name: 'address',
+            type: 'string',
+            title: 'Address',
+          },
+          {
+            name: 'phone',
+            type: 'string',
+            title: 'Phone Number',
+          },
+          {
+            name: 'lastLogin',
+            type: 'number',
+            title: 'Last Log-In',
+          },
+        
     ]
 }

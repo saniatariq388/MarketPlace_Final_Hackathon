@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Star, X, Plus, Minus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { sanityUserPost } from "@/services/userApi";
+import { useRouter, useSearchParams } from "next/navigation"
 
 interface Product {
   id: number;
@@ -14,16 +15,20 @@ interface Product {
   price: number;
   rating: number;
   quantity: number;
+  userID: string;
 }
 
 export default function ShoppingCart() {
   const [products, setProducts] = useState<Product[]>([]);
   const [coupon, setCoupon] = useState("");
   const [discount, setDiscount] = useState(0);
+  
+  const router = useRouter()
+  const searchParam = useSearchParams();
 
 
 
-
+ 
   const updateQuantity = (id: number, change: number) => {
     setProducts((prevProducts) => {
       const updatedProducts = prevProducts.map((product) => {
@@ -37,10 +42,19 @@ export default function ShoppingCart() {
     });
   };
 
+  // const removeProduct = (id: number) => {
+  //   setProducts((prevProducts) =>
+  //     prevProducts.filter((product) => product.id !== id)
+  //   );
+  // };
+ 
   const removeProduct = (id: number) => {
-    setProducts((prevProducts) =>
-      prevProducts.filter((product) => product.id !== id)
-    );
+    const removeProduct = [...products]
+    removeProduct.splice(id, 1)
+      
+    localStorage.setItem("cart", JSON.stringify(removeProduct));
+    setProducts(removeProduct);
+  
   };
 
   const calculateTotal = (price: number, quantity: number) =>
@@ -59,25 +73,53 @@ export default function ShoppingCart() {
     // Logic for proceeding to checkout
     alert("Proceeding to Checkout...");
   };
-
   useEffect(() => {
-    const savedCart = localStorage.getItem("cart");
+    const savedCart = localStorage.getItem("cart")
     if (savedCart) {
-      const parsedCart = JSON.parse(savedCart);
-      if (Array.isArray(parsedCart) && parsedCart.length > 0) {
-        setProducts(parsedCart);
+      try {
+        const parsedCart = JSON.parse(savedCart)
+        if (Array.isArray(parsedCart) && parsedCart.length > 0) {
+          setProducts(parsedCart)
+        }
+      } catch (error) {
+        console.error("Error parsing cart data:", error)
       }
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
     localStorage.setItem("cart", JSON.stringify(products));
   }, [products]);
 
 
-  useEffect(() =>{
-   console.log(sanityUserPost())
-  },[])
+  useEffect(() => {
+    async function getUserId() {
+      return await sanityUserPost();
+    }
+  
+    getUserId().then((sanityUserId) => {
+      const cart = localStorage.getItem("cart");
+      const updatedCart = cart ? JSON.parse(cart) : [];
+      
+      const name = searchParam.get("name");
+      const price = searchParam.get("price");
+      const description = searchParam.get("description");
+      const image = searchParam.get("image");
+  
+      if (name && price && description && image) {
+        const isDuplicate = updatedCart.some((item: Product) => item.name === name);
+        
+        if (!isDuplicate) {
+          updatedCart.push({ name, price, description, image, quantity: 1, userID: sanityUserId });
+        }
+
+  
+        localStorage.setItem("cart", JSON.stringify(updatedCart));
+        setProducts(updatedCart);
+        router.replace("/cart");
+      }
+    });
+  }, [searchParam, router]);
 
   return (
     <>
@@ -111,6 +153,10 @@ export default function ShoppingCart() {
                     />
                   </div>
                   <div>
+                     
+                  <p className="text-sm text-gray-600">
+                                {product.userID}
+                              </p>
                     <p className="text-lg font-semibold">{product.name}</p>
                     <p className="text-sm text-gray-500">${product.price}</p>
                   </div>

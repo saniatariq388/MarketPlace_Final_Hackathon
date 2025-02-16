@@ -1,6 +1,6 @@
 //src\app\checkoutPage\page.tsx
 
-import CheckoutForm from '@/components/CheckoutForm'
+import CheckoutForm from '@/components/Checkout'
 import Footer from '@/components/Footer'
 import HeaderMenu from '@/components/HeaderMenu'
 import React from 'react'
